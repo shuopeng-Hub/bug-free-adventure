@@ -1,0 +1,151 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  name      String
+  email     String?
+  department String?
+  // role      String   // REMOVED: Replaced by UserRole
+  status    String   @default("Pending") // "Pending", "Active", "Rejected"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  roles            UserRole[]
+  submittedTickets Ticket[] @relation("SubmittedTickets")
+  handledTickets   Ticket[] @relation("HandledTickets")
+  projects         ProjectMember[]
+  logs             TicketLog[]
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // e.g. "Admin", "Handler"
+  displayName String?
+  description String?
+  
+  users       UserRole[]
+  permissions RolePermission[]
+  menus       RoleMenu[]
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // e.g. "ticket:create"
+  description String?
+  
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId Int
+  roleId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members ProjectMember[]
+  tickets Ticket[]
+}
+
+model ProjectMember {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  projectId Int
+  role      String?  // Optional role within project
+
+  user    User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId])
+}
+
+model Ticket {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  status      String   @default("Open") // "Open", "Processing", "Pending", "Close"
+  priority    String   @default("Medium") // "Low", "Medium", "High", "Critical"
+  submitterId Int
+  handlerId   Int?
+  projectId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  submitter User    @relation("SubmittedTickets", fields: [submitterId], references: [id])
+  handler   User?   @relation("HandledTickets", fields: [handlerId], references: [id])
+  project   Project @relation(fields: [projectId], references: [id])
+  logs      TicketLog[]
+}
+
+model TicketLog {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  operatorId Int
+  action    String   // e.g., "Created", "Status Changed", "Commented"
+  details   String?
+  createdAt DateTime @default(now())
+
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  operator User   @relation(fields: [operatorId], references: [id])
+}
+
+model RoleMenu {
+  roleId Int
+  menuId Int
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menu   Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, menuId])
+}
+
+model Menu {
+  id          Int      @id @default(autoincrement())
+  name        String
+  path        String
+  component   String?
+  icon        String?
+  permission  String?  
+  type        String   @default("menu") // "catalog", "menu"
+  sort        Int      @default(0)
+  visible     Boolean  @default(true)
+  
+  parentId    Int?
+  parent      Menu?    @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children    Menu[]   @relation("MenuHierarchy")
+  roles       RoleMenu[]
+  
+  createdAt   DateTime @default(now())
+}
